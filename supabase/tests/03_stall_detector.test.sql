@@ -5,13 +5,26 @@ create extension if not exists pgtap with schema extensions;
 select plan(31);
 
 -- ── fixtures ────────────────────────────────────────────────────────────────────────────────
+-- Start from the seed alone: a local database may also hold real test users, their
+-- memberships, and rows left by the end-to-end suite. All of this rolls back with the test.
+delete from public.memberships;
+delete from builder.alerts;
+delete from builder.stall_episodes;
+delete from builder.detector_runs;
+alter table builder.selections disable trigger trg_selections_history;
+delete from builder.selections where selected_by is not null;
+alter table builder.selections enable trigger trg_selections_history;
+alter table builder.selection_history disable trigger trg_selection_history_append_only;
+delete from builder.selection_history where changed_by is not null;
+alter table builder.selection_history enable trigger trg_selection_history_append_only;
+
 insert into auth.users (id, instance_id, aud, role, email, email_confirmed_at,
                         raw_app_meta_data, raw_user_meta_data, created_at, updated_at)
 values
-  ('00000000-0000-0000-0000-00000000ff01', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'staff@stallwatch.test', now(), '{"provider":"email","providers":["email"]}', '{}', now(), now()),
-  ('00000000-0000-0000-0000-00000000aa01', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'ana@builder-a.test',   now(), '{"provider":"email","providers":["email"]}', '{}', now(), now()),
-  ('00000000-0000-0000-0000-00000000aa02', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'mia@builder-a.test',   now(), '{"provider":"email","providers":["email"]}', '{}', now(), now()),
-  ('00000000-0000-0000-0000-00000000bb01', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'bruno@builder-b.test', now(), '{"provider":"email","providers":["email"]}', '{}', now(), now());
+  ('00000000-0000-0000-0000-00000000ff01', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 't-staff@stallwatch.test', now(), '{"provider":"email","providers":["email"]}', '{}', now(), now()),
+  ('00000000-0000-0000-0000-00000000aa01', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 't-ana@builder-a.test',   now(), '{"provider":"email","providers":["email"]}', '{}', now(), now()),
+  ('00000000-0000-0000-0000-00000000aa02', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 't-mia@builder-a.test',   now(), '{"provider":"email","providers":["email"]}', '{}', now(), now()),
+  ('00000000-0000-0000-0000-00000000bb01', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 't-bruno@builder-b.test', now(), '{"provider":"email","providers":["email"]}', '{}', now(), now());
 insert into public.memberships (user_id, org_id, role) values
   ('00000000-0000-0000-0000-00000000ff01', '00000000-0000-0000-0000-0000000000f0', 'admin'),
   ('00000000-0000-0000-0000-00000000aa01', '00000000-0000-0000-0000-0000000000a0', 'admin'),
@@ -39,7 +52,7 @@ create function pg_temp.alerts_for(p_email text) returns int language sql as $$
 $$;
 
 -- ── builders can neither see the run log nor run the detector, by either path ───────────────
-select pg_temp.login_as('ana@builder-a.test');
+select pg_temp.login_as('t-ana@builder-a.test');
 select is((select count(*)::int from builder.detector_runs), 0, 'a builder cannot read the detector run log');
 select throws_ok($$ select builder.run_stall_detector_now() $$, 42501, null,
   'a builder calling run_stall_detector_now() is rejected');
@@ -69,22 +82,22 @@ select results_eq(
 select is((select finished_at is not null from builder.detector_runs order by started_at desc limit 1), true,
   'the run has a finished_at');
 
-select is(pg_temp.alerts_for('ana@builder-a.test'),   1, 'Ana (Builder A admin) got 1 alert (Lot 12)');
-select is(pg_temp.alerts_for('mia@builder-a.test'),   0, 'Mia (Builder A member, not admin) got none');
-select is(pg_temp.alerts_for('bruno@builder-b.test'), 2, 'Bruno (Builder B admin) got 2 (Unit 4B, Unit 7C)');
-select is(pg_temp.alerts_for('staff@stallwatch.test'), 0, 'staff get no stall alerts');
+select is(pg_temp.alerts_for('t-ana@builder-a.test'),   1, 'Ana (Builder A admin) got 1 alert (Lot 12)');
+select is(pg_temp.alerts_for('t-mia@builder-a.test'),   0, 'Mia (Builder A member, not admin) got none');
+select is(pg_temp.alerts_for('t-bruno@builder-b.test'), 2, 'Bruno (Builder B admin) got 2 (Unit 4B, Unit 7C)');
+select is(pg_temp.alerts_for('t-staff@stallwatch.test'), 0, 'staff get no stall alerts');
 
 select is(
-  (select a.message from builder.alerts a join public.users u on u.id = a.user_id where u.email = 'ana@builder-a.test'),
+  (select a.message from builder.alerts a join public.users u on u.id = a.user_id where u.email = 't-ana@builder-a.test'),
   'Lot 12 has had no builder activity for 7 days. 3 slots are still empty.',
   'the alert message reads as the brief describes');
 select is(
-  (select a.org_id from builder.alerts a join public.users u on u.id = a.user_id where u.email = 'ana@builder-a.test'),
+  (select a.org_id from builder.alerts a join public.users u on u.id = a.user_id where u.email = 't-ana@builder-a.test'),
   '00000000-0000-0000-0000-0000000000a0'::uuid,
   'the alert''s org_id is the project''s builder org');
 
 -- ── second run: staff presses Run now; nothing duplicates ───────────────────────────────────
-select pg_temp.login_as('staff@stallwatch.test');
+select pg_temp.login_as('t-staff@stallwatch.test');
 select lives_ok($$ select builder.run_stall_detector_now() $$, 'staff can run it on demand');
 select pg_temp.login_as(null);
 
@@ -93,14 +106,14 @@ select results_eq(
        from builder.detector_runs order by started_at desc limit 1 $$,
   $$ values ('succeeded', 'manual', 3, 0, 0, '00000000-0000-0000-0000-00000000ff01'::uuid) $$,
   'the manual run still flags 3 but creates no new episodes or alerts');
-select is(pg_temp.alerts_for('ana@builder-a.test'), 1, 'Ana still has exactly 1 alert');
+select is(pg_temp.alerts_for('t-ana@builder-a.test'), 1, 'Ana still has exactly 1 alert');
 select throws_ok($$
   insert into builder.stall_episodes (project_id, org_id, quiet_since, detector_run_id)
   select project_id, org_id, quiet_since, detector_run_id from builder.stall_episodes limit 1
 $$, 23505, null, 'the unique (project_id, quiet_since) key refuses a second episode for the same stall');
 
 -- ── staff activity does not un-stall ────────────────────────────────────────────────────────
-select pg_temp.login_as('staff@stallwatch.test');
+select pg_temp.login_as('t-staff@stallwatch.test');
 update builder.selections s set product_name = 'Staff Touch', selected_by = '00000000-0000-0000-0000-00000000ff01'
   from builder.project_slots sl
  where sl.id = s.slot_id and sl.project_id = '00000000-0000-0000-0000-00000000b07c' and sl.room = 'Living';
@@ -109,7 +122,7 @@ select is((select is_stalled from builder.v_projects_overview where name = 'Unit
   'a staff change does not count as builder activity (Unit 7C stays stalled)');
 
 -- ── Ana acts: Lot 12 is no longer stalled, and the badge clears immediately ─────────────────
-select pg_temp.login_as('ana@builder-a.test');
+select pg_temp.login_as('t-ana@builder-a.test');
 insert into builder.selections (org_id, slot_id, product_name, selected_by)
 select s.org_id, s.id, 'Honed Marble', '00000000-0000-0000-0000-00000000aa01'
   from builder.project_slots s
@@ -124,7 +137,7 @@ select is((select projects_flagged from builder.detector_runs order by started_a
 select is((select resolved_at is not null from builder.stall_episodes
             where project_id = '00000000-0000-0000-0000-00000000a012'), true,
   'Lot 12''s episode is marked resolved');
-select is(pg_temp.alerts_for('ana@builder-a.test'), 1, 'no new alert for Ana while she is active');
+select is(pg_temp.alerts_for('t-ana@builder-a.test'), 1, 'no new alert for Ana while she is active');
 
 -- ── Ana goes quiet again for 5+ days: a NEW stall, a NEW alert ──────────────────────────────
 -- Simulate time passing by backdating her last activity (the append-only guard is a trigger;
@@ -142,7 +155,7 @@ select is((select is_stalled from builder.v_projects_overview where name = 'Lot 
 select lives_ok($$ select private.run_stall_detector('scheduled', null) $$, 'fourth run succeeds');
 select is((select new_episodes from builder.detector_runs order by started_at desc limit 1), 1,
   'the fourth run sees Lot 12 as a new stall');
-select is(pg_temp.alerts_for('ana@builder-a.test'), 2, 'Ana gets a second, new alert for the new stall');
+select is(pg_temp.alerts_for('t-ana@builder-a.test'), 2, 'Ana gets a second, new alert for the new stall');
 
 -- ── a failed run is recorded as failed, with its error, and leaves no half-finished work ────
 alter table builder.stall_episodes rename to stall_episodes_broken;
