@@ -1,9 +1,9 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
-  cacheComponents: true,
-  partialPrefetching: true,
+  // Every page reads the session cookie and renders per user, so there is nothing to
+  // prerender into a static shell. Plain dynamic rendering keeps the app simple.
+  cacheComponents: false,
   turbopack: {
     rules: {
       "*.css": {
