@@ -13,3 +13,5 @@ table is the index. Never edit an applied migration; add a new one.
 | `20261020130500_selections_and_history.sql` | `builder.selections`, append-only `builder.selection_history`, the history trigger that derives `actor_kind` from the caller's membership |
 | `20261020130600_projects_overview_view.sql` | `builder.v_projects_overview` (security_invoker): slot counts, last builder activity, `quiet_since`, `is_stalled` |
 | `20261020130700_alerts.sql` | `builder.alerts`, recipient-only policies, `update (read_at)` column grant, unique `(user_id, kind, source_key)` |
+| `20261020130800_stall_detector.sql` | `builder.detector_runs`, `builder.stall_episodes`, the worker `private.run_stall_detector()`, staff RPC `builder.run_stall_detector_now()` |
+| `20261020130900_pg_cron_schedule.sql` | pg_cron extension and the nightly `stall-detector-nightly` job (09:00 UTC) |
