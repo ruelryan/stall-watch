@@ -16,34 +16,37 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
 
   return (
     <>
-      <header className="border-b border-neutral-200">
-        <nav className="mx-auto flex max-w-5xl flex-wrap items-center gap-4 px-6 py-3 text-sm">
-          <Link href="/projects" className="font-semibold">
+      <header className="border-b border-line bg-paper">
+        <nav className="mx-auto flex w-full max-w-5xl flex-wrap items-center gap-x-6 gap-y-2 px-6 py-3 text-sm">
+          <Link href="/projects" className="font-semibold tracking-tight">
             Stall Watch
           </Link>
-          <Link href="/projects" className="hover:underline">
+          <Link href="/projects" className="text-mute hover:text-ink">
             Projects
           </Link>
-          <Link href="/alerts" className="hover:underline">
-            Alerts{unread ? ` (${unread})` : ""}
+          <Link href="/alerts" className="flex items-center gap-1.5 text-mute hover:text-ink">
+            Alerts
+            {unread ? (
+              <span className="pill pill-stalled num px-1.5 py-0 text-[11px]">{unread}</span>
+            ) : null}
           </Link>
           {user.isStaff ? (
-            <Link href="/detector" className="hover:underline">
+            <Link href="/detector" className="text-mute hover:text-ink">
               Detector
             </Link>
           ) : null}
-          <span className="ml-auto text-neutral-600">
+          <span className="ml-auto text-mute">
             {user.email}
-            {user.isStaff ? " · staff" : ""}
+            {user.isStaff ? <span className="ml-2 pill pill-dim">staff</span> : null}
           </span>
           <form action={signOut}>
-            <button type="submit" className="hover:underline">
+            <button type="submit" className="btn btn-quiet px-0">
               Sign out
             </button>
           </form>
         </nav>
       </header>
-      <main className="mx-auto w-full max-w-5xl px-6 py-6">{children}</main>
+      <main className="mx-auto w-full max-w-5xl px-6 pb-16 pt-8">{children}</main>
     </>
   );
 }
