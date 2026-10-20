@@ -3,6 +3,13 @@ import { getCurrentUser } from "@/lib/auth";
 import { formatDate, daysSince } from "@/lib/format";
 import { createClient } from "@/lib/supabase/server";
 
+const statusWords: Record<string, string> = {
+  pending_kickoff: "Pending kickoff",
+  selection_phase: "Selecting",
+  revision: "In revision",
+  complete: "Complete",
+};
+
 export default async function ProjectsPage() {
   const user = await getCurrentUser();
   const supabase = await createClient();
@@ -17,71 +24,93 @@ export default async function ProjectsPage() {
     .order("name");
 
   if (error) {
-    return <p className="text-red-700">Could not load projects: {error.message}</p>;
+    return (
+      <p role="alert" className="rounded-sm bg-kiln-wash px-3 py-2 text-sm text-kiln">
+        Projects could not be loaded: {error.message}
+      </p>
+    );
   }
+
+  const stalled = projects.filter((p) => p.is_stalled).length;
 
   return (
     <>
-      <h1 className="text-xl font-semibold">Projects</h1>
-      {projects.length === 0 ? (
-        <p className="mt-4 text-neutral-600">
-          No projects to show. If you expected some, your account may not be a member of an org yet.
+      <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1">
+        <h1 className="text-2xl font-medium tracking-tight">Projects</h1>
+        <p className="text-sm text-mute">
+          {stalled === 0
+            ? "Nothing is stalled right now."
+            : `${stalled} ${stalled === 1 ? "project has" : "projects have"} gone quiet with slots still empty.`}
         </p>
+      </div>
+
+      {projects.length === 0 ? (
+        <div className="mt-8 rounded-sm border border-line bg-paper px-5 py-8 text-sm text-mute">
+          <p className="text-ink">No projects to show.</p>
+          <p className="mt-1">
+            Your account is signed in but is not yet a member of a builder. Ask Reverie3D to
+            add you.
+          </p>
+        </div>
       ) : (
-        <table className="mt-4 w-full border-collapse text-sm">
-          <thead>
-            <tr className="border-b border-neutral-300 text-left">
-              <th className="py-2 pr-4">Project</th>
-              {user.isStaff ? <th className="py-2 pr-4">Builder</th> : null}
-              <th className="py-2 pr-4">Status</th>
-              <th className="py-2 pr-4">Slots filled</th>
-              <th className="py-2 pr-4">Last builder activity</th>
-              <th className="py-2 pr-4">Due</th>
-              <th className="py-2 pr-4"></th>
-            </tr>
-          </thead>
-          <tbody>
-            {projects.map((p) => {
-              const quietDays = daysSince(p.quiet_since);
-              return (
-                <tr key={p.id} className="border-b border-neutral-200">
-                  <td className="py-2 pr-4">
-                    <Link href={`/projects/${p.id}`} className="underline">
-                      {p.name}
-                    </Link>
-                    {p.archived_at ? (
-                      <span className="ml-2 text-xs text-neutral-500">archived</span>
-                    ) : null}
-                  </td>
-                  {user.isStaff ? <td className="py-2 pr-4">{p.org_name}</td> : null}
-                  <td className="py-2 pr-4">{p.status}</td>
-                  <td className="py-2 pr-4">
-                    {(p.total_slots ?? 0) - (p.empty_slots ?? 0)} / {p.total_slots}
-                  </td>
-                  <td className="py-2 pr-4">
-                    {formatDate(p.last_builder_activity_at)}
-                    {p.status === "selection_phase" && quietDays !== null ? (
-                      <span className="ml-1 text-neutral-500">({quietDays}d quiet)</span>
-                    ) : null}
-                  </td>
-                  <td className="py-2 pr-4">{formatDate(p.selection_due_date)}</td>
-                  <td className="py-2 pr-4">
-                    {p.is_stalled ? (
-                      <span className="rounded bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-800">
-                        stalled
-                      </span>
-                    ) : null}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+        <div className="mt-6 overflow-x-auto rounded-sm border border-line bg-paper px-5 pt-1">
+          <table className="table">
+            <thead>
+              <tr>
+                <th>Project</th>
+                {user.isStaff ? <th>Builder</th> : null}
+                <th>Status</th>
+                <th className="num">Slots filled</th>
+                <th>Last builder activity</th>
+                <th>Selections due</th>
+                <th className="w-24"></th>
+              </tr>
+            </thead>
+            <tbody>
+              {projects.map((p) => {
+                const quietDays = daysSince(p.quiet_since);
+                const filled = (p.total_slots ?? 0) - (p.empty_slots ?? 0);
+                return (
+                  <tr key={p.id}>
+                    <td>
+                      <Link
+                        href={`/projects/${p.id}`}
+                        className="font-medium underline decoration-line-strong underline-offset-4 hover:decoration-ink"
+                      >
+                        {p.name}
+                      </Link>
+                      {p.archived_at ? <span className="ml-2 text-xs text-mute">archived</span> : null}
+                    </td>
+                    {user.isStaff ? <td>{p.org_name}</td> : null}
+                    <td>{statusWords[p.status ?? ""] ?? p.status}</td>
+                    <td className="num">
+                      {filled} of {p.total_slots}
+                      {(p.empty_slots ?? 0) > 0 && p.status === "selection_phase" ? (
+                        <span className="ml-2 text-mute">{p.empty_slots} empty</span>
+                      ) : null}
+                    </td>
+                    <td className="num">
+                      {formatDate(p.last_builder_activity_at)}
+                      {p.status === "selection_phase" && quietDays !== null ? (
+                        <span className="ml-2 text-mute">
+                          {quietDays === 0 ? "today" : `${quietDays}d quiet`}
+                        </span>
+                      ) : null}
+                    </td>
+                    <td className="num">{formatDate(p.selection_due_date)}</td>
+                    <td>{p.is_stalled ? <span className="pill pill-stalled">Stalled</span> : null}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       )}
-      <p className="mt-4 text-xs text-neutral-500">
-        A project is stalled when it is in selection phase, has at least one empty slot, and has had
-        no builder activity for 5 or more days. The badge is live; alerts are sent by the nightly
-        detector.
+
+      <p className="mt-4 max-w-prose text-xs text-mute">
+        A project is stalled when it is selecting finishes, still has an empty slot, and no
+        builder has set, changed or cleared a selection for 5 days. The badge is live; alerts
+        go out when the nightly detector runs.
       </p>
     </>
   );

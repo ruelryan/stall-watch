@@ -4,6 +4,13 @@ import { formatDate, formatDateTime } from "@/lib/format";
 import { createClient } from "@/lib/supabase/server";
 import { clearSelection, saveSelection } from "./actions";
 
+const statusWords: Record<string, string> = {
+  pending_kickoff: "pending kickoff",
+  selection_phase: "selecting finishes",
+  revision: "in revision",
+  complete: "complete",
+};
+
 export default async function ProjectPage({
   params,
   searchParams,
@@ -39,94 +46,109 @@ export default async function ProjectPage({
       : { data: [] };
   const bySlot = new Map((currentSelections ?? []).map((s) => [s.slot_id, s]));
 
+  // Slots group naturally by room; show them that way.
+  const rooms = new Map<string, typeof slots>();
+  for (const slot of slots ?? []) {
+    const list = rooms.get(slot.room) ?? [];
+    list.push(slot);
+    rooms.set(slot.room, list);
+  }
+
+  const filled = (project.total_slots ?? 0) - (project.empty_slots ?? 0);
+
   return (
     <>
       <p className="text-sm">
-        <Link href="/projects" className="underline">
-          ← Projects
+        <Link href="/projects" className="text-mute hover:text-ink">
+          Projects
         </Link>
-      </p>
-      <h1 className="mt-2 text-xl font-semibold">
-        {project.name}
-        {project.is_stalled ? (
-          <span className="ml-3 rounded bg-red-100 px-2 py-0.5 align-middle text-xs font-semibold text-red-800">
-            stalled
-          </span>
-        ) : null}
-      </h1>
-      <p className="mt-1 text-sm text-neutral-600">
-        {project.org_name} · {project.status} · due {formatDate(project.selection_due_date)} ·{" "}
-        {(project.total_slots ?? 0) - (project.empty_slots ?? 0)} of {project.total_slots} slots
-        filled · last builder activity {formatDateTime(project.last_builder_activity_at)}
+        <span className="mx-2 text-line-strong">/</span>
+        <span>{project.name}</span>
       </p>
 
+      <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2">
+        <h1 className="text-2xl font-medium tracking-tight">{project.name}</h1>
+        {project.is_stalled ? <span className="pill pill-stalled">Stalled</span> : null}
+      </div>
+      <p className="mt-1 text-sm text-mute">
+        {project.org_name}, {statusWords[project.status ?? ""] ?? project.status}. Selections
+        due {formatDate(project.selection_due_date)}.
+      </p>
+
+      <dl className="mt-5 grid max-w-xl grid-cols-2 gap-x-8 gap-y-1 text-sm sm:grid-cols-3">
+        <div>
+          <dt className="text-mute">Slots filled</dt>
+          <dd className="num text-lg">
+            {filled} <span className="text-mute">of {project.total_slots}</span>
+          </dd>
+        </div>
+        <div>
+          <dt className="text-mute">Last builder activity</dt>
+          <dd className="num">{formatDateTime(project.last_builder_activity_at)}</dd>
+        </div>
+        <div>
+          <dt className="text-mute">Selection phase started</dt>
+          <dd className="num">{formatDate(project.selection_phase_started_at)}</dd>
+        </div>
+      </dl>
+
       {error ? (
-        <p role="alert" className="mt-4 rounded bg-red-50 p-3 text-sm text-red-800">
+        <p role="alert" className="mt-6 rounded-sm bg-kiln-wash px-3 py-2 text-sm text-kiln">
           {error}
         </p>
       ) : null}
 
-      <table className="mt-6 w-full border-collapse text-sm">
-        <thead>
-          <tr className="border-b border-neutral-300 text-left">
-            <th className="py-2 pr-4">Slot</th>
-            <th className="py-2 pr-4">Selection</th>
-            <th className="py-2 pr-4"></th>
-          </tr>
-        </thead>
-        <tbody>
-          {(slots ?? []).map((slot) => {
-            const current = bySlot.get(slot.id);
-            return (
-              <tr key={slot.id} className="border-b border-neutral-200 align-top">
-                <td className="py-2 pr-4 whitespace-nowrap">
-                  {slot.room} – {slot.category}
-                </td>
-                <td className="py-2 pr-4">
-                  <form action={saveSelection} className="flex flex-wrap items-center gap-2">
-                    <input type="hidden" name="project_id" value={id} />
-                    <input type="hidden" name="slot_id" value={slot.id} />
-                    <input type="hidden" name="org_id" value={slot.org_id} />
-                    <input
-                      name="product_name"
-                      defaultValue={current?.product_name ?? ""}
-                      placeholder="e.g. Calacatta Quartz 3cm"
-                      className="w-72 rounded border border-neutral-300 px-2 py-1"
-                    />
-                    <button
-                      type="submit"
-                      className="rounded border border-neutral-400 px-2 py-1 hover:bg-neutral-100"
-                    >
-                      {current ? "Change" : "Set"}
-                    </button>
-                  </form>
-                  {current ? (
-                    <p className="mt-1 text-xs text-neutral-500">
-                      picked {formatDateTime(current.updated_at)}
-                    </p>
-                  ) : (
-                    <p className="mt-1 text-xs text-neutral-500">empty</p>
-                  )}
-                </td>
-                <td className="py-2 pr-4">
-                  {current ? (
-                    <form action={clearSelection}>
-                      <input type="hidden" name="project_id" value={id} />
-                      <input type="hidden" name="slot_id" value={slot.id} />
-                      <button
-                        type="submit"
-                        className="rounded border border-neutral-400 px-2 py-1 hover:bg-neutral-100"
-                      >
-                        Clear
-                      </button>
-                    </form>
-                  ) : null}
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
+      <div className="mt-8 flex flex-col gap-8">
+        {[...rooms.entries()].map(([room, roomSlots]) => (
+          <section key={room}>
+            <h2 className="border-b border-line-strong pb-2 text-sm font-medium">{room}</h2>
+            <ul className="divide-y divide-line">
+              {(roomSlots ?? []).map((slot) => {
+                const current = bySlot.get(slot.id);
+                return (
+                  <li
+                    key={slot.id}
+                    className="grid grid-cols-1 gap-3 py-3 sm:grid-cols-[12rem_1fr] sm:items-start"
+                  >
+                    <div className="text-sm">
+                      <p>{slot.category}</p>
+                      <p className="num text-xs text-mute">
+                        {current ? `picked ${formatDateTime(current.updated_at)}` : "empty"}
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <form action={saveSelection} className="flex min-w-0 flex-1 items-center gap-2">
+                        <input type="hidden" name="project_id" value={id} />
+                        <input type="hidden" name="slot_id" value={slot.id} />
+                        <input type="hidden" name="org_id" value={slot.org_id} />
+                        <input
+                          name="product_name"
+                          defaultValue={current?.product_name ?? ""}
+                          placeholder="Product name, e.g. Calacatta Quartz 3cm"
+                          aria-label={`${room} ${slot.category} product`}
+                          className="field max-w-md"
+                        />
+                        <button type="submit" className={current ? "btn" : "btn btn-primary"}>
+                          {current ? "Change" : "Set"}
+                        </button>
+                      </form>
+                      {current ? (
+                        <form action={clearSelection}>
+                          <input type="hidden" name="project_id" value={id} />
+                          <input type="hidden" name="slot_id" value={slot.id} />
+                          <button type="submit" className="btn btn-quiet">
+                            Clear
+                          </button>
+                        </form>
+                      ) : null}
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          </section>
+        ))}
+      </div>
     </>
   );
 }
