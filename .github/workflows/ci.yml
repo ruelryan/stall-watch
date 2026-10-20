@@ -33,8 +33,10 @@ jobs:
         with:
           version: 2.121.0
       # `supabase start` applies every migration and seed.sql to a fresh local Postgres,
-      # which is the same rebuild-from-repo check the reviewers do.
-      - run: supabase start -x realtime,storage-api,imgproxy,mailpit,studio,edge-runtime,logflare,vector,supavisor
+      # which is the same rebuild-from-repo check the reviewers do. Only Postgres and Auth
+      # are needed for pgTAP; the API layer (PostgREST) is left out so an exposed schema
+      # that a migration has not created yet cannot block the job.
+      - run: supabase start -x postgrest,kong,postgres-meta,realtime,storage-api,imgproxy,mailpit,studio,edge-runtime,logflare,vector,supavisor
       - run: supabase test db
       - if: always()
         run: supabase stop --no-backup
