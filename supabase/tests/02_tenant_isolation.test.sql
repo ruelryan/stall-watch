@@ -6,17 +6,30 @@ create extension if not exists pgtap with schema extensions;
 select plan(33);
 
 -- ── fixtures ────────────────────────────────────────────────────────────────────────────────
+-- Start from the seed alone: a local database may also hold real test users, their
+-- memberships, and rows left by the end-to-end suite. All of this rolls back with the test.
+delete from public.memberships;
+delete from builder.alerts;
+delete from builder.stall_episodes;
+delete from builder.detector_runs;
+alter table builder.selections disable trigger trg_selections_history;
+delete from builder.selections where selected_by is not null;
+alter table builder.selections enable trigger trg_selections_history;
+alter table builder.selection_history disable trigger trg_selection_history_append_only;
+delete from builder.selection_history where changed_by is not null;
+alter table builder.selection_history enable trigger trg_selection_history_append_only;
+
 insert into auth.users (id, instance_id, aud, role, email, email_confirmed_at,
                         raw_app_meta_data, raw_user_meta_data, created_at, updated_at)
 values
-  ('00000000-0000-0000-0000-00000000ff01', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'staff@stallwatch.test', now(), '{"provider":"email","providers":["email"]}', '{}', now(), now()),
-  ('00000000-0000-0000-0000-00000000aa01', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'ana@builder-a.test',   now(), '{"provider":"email","providers":["email"]}', '{}', now(), now()),
-  ('00000000-0000-0000-0000-00000000aa02', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'mia@builder-a.test',   now(), '{"provider":"email","providers":["email"]}', '{}', now(), now()),
-  ('00000000-0000-0000-0000-00000000bb01', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'bruno@builder-b.test', now(), '{"provider":"email","providers":["email"]}', '{}', now(), now()),
-  ('00000000-0000-0000-0000-00000000cc01', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'nobody@example.test',  now(), '{"provider":"email","providers":["email"]}', '{}', now(), now());
+  ('00000000-0000-0000-0000-00000000ff01', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 't-staff@stallwatch.test', now(), '{"provider":"email","providers":["email"]}', '{}', now(), now()),
+  ('00000000-0000-0000-0000-00000000aa01', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 't-ana@builder-a.test',   now(), '{"provider":"email","providers":["email"]}', '{}', now(), now()),
+  ('00000000-0000-0000-0000-00000000aa02', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 't-mia@builder-a.test',   now(), '{"provider":"email","providers":["email"]}', '{}', now(), now()),
+  ('00000000-0000-0000-0000-00000000bb01', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 't-bruno@builder-b.test', now(), '{"provider":"email","providers":["email"]}', '{}', now(), now()),
+  ('00000000-0000-0000-0000-00000000cc01', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 't-nobody@example.test',  now(), '{"provider":"email","providers":["email"]}', '{}', now(), now());
 
 select is((select count(*)::int from public.users where email in
-  ('staff@stallwatch.test', 'ana@builder-a.test', 'mia@builder-a.test', 'bruno@builder-b.test', 'nobody@example.test')),
+  ('t-staff@stallwatch.test', 't-ana@builder-a.test', 't-mia@builder-a.test', 't-bruno@builder-b.test', 't-nobody@example.test')),
   5, 'auth-mirror trigger copied every auth user into public.users');
 
 -- Same rows link-test-users.sql inserts.
@@ -52,7 +65,7 @@ create function pg_temp.b_slot_id() returns uuid language sql security definer a
 $$;
 
 -- ── Ana (Builder A admin) ───────────────────────────────────────────────────────────────────
-select pg_temp.login_as('ana@builder-a.test');
+select pg_temp.login_as('t-ana@builder-a.test');
 
 select is((select count(*)::int from builder.projects), 5, 'Ana sees exactly Builder A''s 5 projects');
 select is((select count(*)::int from builder.projects where org_id = '00000000-0000-0000-0000-0000000000b0'), 0,
@@ -127,7 +140,7 @@ select throws_ok($$
 $$, 42501, null, 'selected_by must be the caller');
 
 -- ── Staff ───────────────────────────────────────────────────────────────────────────────────
-select pg_temp.login_as('staff@stallwatch.test');
+select pg_temp.login_as('t-staff@stallwatch.test');
 
 select is((select count(*)::int from builder.projects), 9, 'staff see every project');
 select is((select count(*)::int from public.orgs), 3, 'staff see every org');
@@ -147,11 +160,11 @@ select is((select lock_version from builder.projects where id = '00000000-0000-0
   'lock_version is bumped on update');
 
 -- ── Bruno (Builder B admin) ─────────────────────────────────────────────────────────────────
-select pg_temp.login_as('bruno@builder-b.test');
+select pg_temp.login_as('t-bruno@builder-b.test');
 select is((select count(*)::int from builder.projects), 4, 'Bruno sees exactly Builder B''s 4 projects');
 
 -- ── A signed-in user with no membership sees nothing ────────────────────────────────────────
-select pg_temp.login_as('nobody@example.test');
+select pg_temp.login_as('t-nobody@example.test');
 select is((select count(*)::int from builder.projects), 0, 'a user with no membership sees no projects');
 select is((select count(*)::int from public.orgs), 0, 'a user with no membership sees no orgs');
 
@@ -161,12 +174,12 @@ insert into builder.alerts (org_id, user_id, project_id, kind, message, source_k
 values ('00000000-0000-0000-0000-0000000000a0', '00000000-0000-0000-0000-00000000aa01',
         '00000000-0000-0000-0000-00000000a012', 'stall', 'test alert', 'test-1');
 
-select pg_temp.login_as('bruno@builder-b.test');
+select pg_temp.login_as('t-bruno@builder-b.test');
 select is((select count(*)::int from builder.alerts), 0, 'Bruno cannot see Ana''s alert');
-select pg_temp.login_as('staff@stallwatch.test');
+select pg_temp.login_as('t-staff@stallwatch.test');
 select is((select count(*)::int from builder.alerts), 0, 'staff cannot see Ana''s alert either');
 
-select pg_temp.login_as('ana@builder-a.test');
+select pg_temp.login_as('t-ana@builder-a.test');
 select is((select count(*)::int from builder.alerts), 1, 'Ana sees her alert');
 select throws_ok($$ update builder.alerts set message = 'edited' $$, 42501, null,
   'the recipient cannot change anything but read_at (column grant)');

@@ -37,7 +37,24 @@ Useful scripts:
 | `npm run db:reset` | Drop and rebuild the local database from migrations + seed |
 | `npm run db:test` | Run the pgTAP tests in `supabase/tests/` |
 | `npm run db:types` | Regenerate `lib/supabase/database.types.ts` from the local schema |
+| `npm run db:lint` | `plpgsql_check` over every function in the local database |
+| `npm run test:e2e` | Playwright: the brief's story in a real browser against the local stack |
 | `npm run lint`, `npm run typecheck`, `npm run build` | What CI runs |
+
+## Tests
+
+- **pgTAP** (`supabase/tests/`, 113 assertions): schema-rule hygiene read from the catalog,
+  Builder A trying to read and write Builder B's data, the detector on the seed scenarios
+  (no duplicates, re-stall after new activity, failed runs recorded), the late-change alert,
+  and constraints and edges (check constraints, the 5-day boundary, members vs admins,
+  users with no membership, anon). Every file resets to seed-only state and rolls back.
+- **Playwright** (`e2e/`, 8 scenarios): sign-in and redirects, Ana's isolation, staff running
+  the detector twice (3/3/3 then 3/0/0), Bruno's alerts and mark-as-read, Mia getting none,
+  Ana's selection clearing the badge, an empty product refused. `e2e/global-setup.ts`
+  creates the four local test users through the local Auth admin API, links them with the
+  provided `link-test-users.sql`, and removes anything a previous run left behind.
+- **CI** runs all of it on every PR, plus `supabase db lint` and a gitleaks scan of the
+  whole history.
 
 ## Repo map
 
@@ -48,6 +65,7 @@ supabase/config.toml    Local stack config, including the exposed API schemas
 supabase/migrations/    The entire schema. The database is rebuilt from these alone.
 supabase/seed.sql       Sample data (provided with the brief, unchanged)
 supabase/link-test-users.sql  Links the test users to their orgs (provided)
-supabase/tests/         pgTAP tests: RLS hygiene, tenant isolation, detector behaviour
+supabase/tests/         pgTAP tests: RLS hygiene, tenant isolation, detector behaviour, edges
+e2e/                    Playwright tests and their setup (local stack only)
 .github/workflows/      CI
 ```
