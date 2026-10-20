@@ -1,26 +1,129 @@
 @import "tailwindcss";
 
+/* Quarry palette: porcelain ground, slate ink, one kiln-red for what needs attention. */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --ground: #f1f2f0;
+  --paper: #ffffff;
+  --ink: #17201f;
+  --mute: #5c6664;
+  --line: #d8dcd9;
+  --line-strong: #b9c0bd;
+  --slate: #2f4f6f;
+  --slate-deep: #243d56;
+  --kiln: #a33a2a;
+  --kiln-wash: #f6e8e4;
+  --moss: #3b6b4f;
+  --moss-wash: #e6efe9;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-ground: var(--ground);
+  --color-paper: var(--paper);
+  --color-ink: var(--ink);
+  --color-mute: var(--mute);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-slate: var(--slate);
+  --color-slate-deep: var(--slate-deep);
+  --color-kiln: var(--kiln);
+  --color-kiln-wash: var(--kiln-wash);
+  --color-moss: var(--moss);
+  --color-moss-wash: var(--moss-wash);
+  --font-sans: var(--font-plex), "Segoe UI", system-ui, sans-serif;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+html {
+  background: var(--ground);
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--ground);
+  color: var(--ink);
+  font-family: var(--font-plex), "Segoe UI", system-ui, sans-serif;
+  font-feature-settings: "tnum" 1, "cv05" 1;
+  line-height: 1.5;
+}
+
+:focus-visible {
+  outline: 2px solid var(--slate);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition: none !important;
+    animation: none !important;
+  }
+}
+
+/* Shared controls. Kept as classes so every page uses the same three shapes. */
+.btn {
+  @apply inline-flex items-center justify-center rounded-sm border border-line-strong bg-paper px-3 py-1.5 text-sm text-ink;
+}
+.btn:hover {
+  border-color: var(--ink);
+}
+.btn-primary {
+  @apply border-slate bg-slate text-paper;
+}
+.btn-primary:hover {
+  background: var(--slate-deep);
+  border-color: var(--slate-deep);
+}
+.btn-quiet {
+  @apply border-transparent bg-transparent text-mute;
+}
+.btn-quiet:hover {
+  color: var(--ink);
+  border-color: transparent;
+}
+.field {
+  @apply w-full rounded-sm border border-line-strong bg-paper px-3 py-1.5 text-sm text-ink;
+}
+.field::placeholder {
+  color: #9aa3a0;
+}
+.field:focus {
+  border-color: var(--slate);
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(47, 79, 111, 0.18);
+}
+
+/* Status words. Only "stalled" and "failed" get colour. */
+.pill {
+  @apply inline-block rounded-sm px-1.5 py-0.5 text-xs leading-5;
+}
+.pill-stalled {
+  background: var(--kiln);
+  color: var(--paper);
+  font-weight: 600;
+}
+.pill-ok {
+  background: var(--moss-wash);
+  color: var(--moss);
+}
+.pill-bad {
+  background: var(--kiln-wash);
+  color: var(--kiln);
+}
+.pill-dim {
+  background: var(--ground);
+  color: var(--mute);
+}
+
+/* Tables: dense, aligned, hairline rows, no zebra. */
+.table {
+  @apply w-full border-collapse text-sm;
+}
+.table th {
+  @apply border-b border-line-strong py-2 pr-4 text-left font-medium text-mute;
+}
+.table td {
+  @apply border-b border-line py-2.5 pr-4 align-top;
+}
+.table tr:last-child td {
+  border-bottom: none;
+}
+.num {
+  font-variant-numeric: tabular-nums;
 }
