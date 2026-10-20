@@ -12,7 +12,9 @@
     "db:stop": "supabase stop",
     "db:reset": "supabase db reset",
     "db:test": "supabase test db",
-    "db:types": "supabase gen types typescript --local --schema public,builder > lib/supabase/database.types.ts"
+    "db:types": "supabase gen types typescript --local --schema public,builder > lib/supabase/database.types.ts",
+    "db:lint": "supabase db lint --local --level warning",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.7",
@@ -22,12 +24,15 @@
     "react-dom": "19.3.0"
   },
   "devDependencies": {
+    "@playwright/test": "^1.64.1",
     "@tailwindcss/turbopack": "^4",
     "@types/node": "^20",
+    "@types/pg": "^8.23.1",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.4.2",
+    "pg": "^8.23.1",
     "supabase": "^2.121.0",
     "tailwindcss": "^4",
     "typescript": "^5"
