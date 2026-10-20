@@ -15,3 +15,4 @@ table is the index. Never edit an applied migration; add a new one.
 | `20261020130700_alerts.sql` | `builder.alerts`, recipient-only policies, `update (read_at)` column grant, unique `(user_id, kind, source_key)` |
 | `20261020130800_stall_detector.sql` | `builder.detector_runs`, `builder.stall_episodes`, the worker `private.run_stall_detector()`, staff RPC `builder.run_stall_detector_now()` |
 | `20261020130900_pg_cron_schedule.sql` | pg_cron extension and the nightly `stall-detector-nightly` job (09:00 UTC) |
+| `20261020131000_late_change_alert_trigger.sql` | Part 3 bonus: `trg_selection_history_late_change` alerts every staff user when a builder changes a selection after revision |
